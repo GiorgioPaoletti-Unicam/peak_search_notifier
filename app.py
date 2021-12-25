@@ -12,6 +12,7 @@ from sklearn.cluster import KMeans
 
 app = Flask(__name__)
 
+# nlp = spacy.load('it_core_news_sm')
 nlp = spacy.load('it_core_news_sm')
 
 client = MongoClient()
@@ -26,7 +27,8 @@ def clean_string(inp_str):
 
 def convert_to_vec(question):
     tokens = clean_string(question)
-    tokens = [t for t in tokens if t not in stopwords.words('italian')]
+    # tokens = [t for t in tokens if t not in stopwords.words('italian')]
+    tokens = [t for t in tokens if t not in stopwords.words('english')]
     # nlp = spacy.load('it')
     doc = nlp(str(question))
     return doc.vector
@@ -46,6 +48,11 @@ def sent_notification(questions):
     return True
 
 
+def verify_query(query):
+    if len(query["text"]) != 0:
+        return True
+
+
 @app.route('/')
 def hello_world():  # put application's code here
     return 'Hello World!'
@@ -55,33 +62,46 @@ def hello_world():  # put application's code here
 # Tutte le Query che sono state coinvolte per l'attivazione del trigger devono essere eliminate,
 # sennò alla n+1 query rifaranno ripartire la notifica
 
+@app.route('/verifyQuery', methods=['GET'])
+def ver_query():
+    if verify_query(request.get_json()):
+        return "True"
+    else:
+        return "False"
+
 
 @app.route('/addQuery', methods=['POST'])
 def add_query():
-    req = request.get_json()
-    if collection.insert_one(json.loads(json_util.dumps(request.get_json()))):
+    if collection.insert_one(json.loads(json_util.dumps(request.get_json()))) and verify_query(request.get_json()):
 
         # Se viene aggiunta una query correttamente, viene ricalcolato l'algoritmo k-means su tutte le query presenti
         # nel db.
 
-        questions = collection.find({})
-        nclusters = 22
+        questions = list(collection.find({}))
+        # nclusters = 22
+        nclusters = 4
         clusters = cluster_questions(questions, nclusters)
         question_clusters = []
-        for cluster in range(nclusters):
+
+        # si blocca se il cluster è vuoto
+        # for cluster in range(nclusters):
+        for i, cluster in enumerate(clusters):
             question_cluster = []
-            for i, sentence in enumerate(clusters[cluster]):
+            # if clusters[cluster] is not None:
+            for j, sentence in enumerate(clusters[cluster]):
                 question_cluster.append([str(questions[sentence])])
             question_clusters.append(question_cluster)
 
         # Se esiste un cluster con un numero strano (da definire, idea: variabile globale) di elementi,
         # viene attivata la funzione per inviare la notifica al sistema
-
+        """
         for question_cluster in question_clusters:
             if len(question_cluster) >= 10:
-                sent_notification(question_cluster)
+                sent_notifi
+                cation(question_cluster)
+        """
 
-        return req
+        return request.get_json()
     else:
         return "query not added"
 
