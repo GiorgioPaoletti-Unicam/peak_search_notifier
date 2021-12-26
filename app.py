@@ -48,6 +48,12 @@ def sent_notification(questions):
     return True
 
 
+def clear_db(questions):
+    for query in questions:
+        collection.delete_one({'_id': query["_id"]})
+    return True
+
+
 def verify_query(query):
     if len(query["text"]) != 0:
         return True
@@ -59,8 +65,7 @@ def hello_world():  # put application's code here
 
 
 # Svuotare il db ogni giorno
-# Tutte le Query che sono state coinvolte per l'attivazione del trigger devono essere eliminate,
-# sennò alla n+1 query rifaranno ripartire la notifica
+
 
 @app.route('/verifyQuery', methods=['GET'])
 def ver_query():
@@ -81,25 +86,21 @@ def add_query():
         # nclusters = 22
         nclusters = 4
         clusters = cluster_questions(questions, nclusters)
-        question_clusters = []
+        # question_clusters = []
 
-        # si blocca se il cluster è vuoto
-        # for cluster in range(nclusters):
         for i, cluster in enumerate(clusters):
             question_cluster = []
-            # if clusters[cluster] is not None:
             for j, sentence in enumerate(clusters[cluster]):
-                question_cluster.append([str(questions[sentence])])
-            question_clusters.append(question_cluster)
+                question_cluster.append(questions[sentence])
 
-        # Se esiste un cluster con un numero strano (da definire, idea: variabile globale) di elementi,
-        # viene attivata la funzione per inviare la notifica al sistema
-        """
-        for question_cluster in question_clusters:
+            # Se esiste un cluster con un numero strano (da definire, idea: variabile globale) di elementi,
+            # viene attivata la funzione per inviare la notifica al sistema
+            # Tutte le Query che sono state coinvolte per l'attivazione del trigger devono essere eliminate,
+            # sennò alla n+1 query rifaranno ripartire la notifica
             if len(question_cluster) >= 10:
-                sent_notifi
-                cation(question_cluster)
-        """
+                sent_notification(question_cluster)
+                clear_db(question_cluster)
+            # question_clusters.append(question_cluster)
 
         return request.get_json()
     else:
