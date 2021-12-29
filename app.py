@@ -36,8 +36,7 @@ def convert_to_vec(question):
 
 def cluster_questions(questions, nb_of_clusters=5):
     question_vectors = [convert_to_vec(question["text"]) for question in questions]
-    kmeans = KMeans(n_clusters=nb_of_clusters)
-    kmeans.fit(question_vectors)
+    kmeans = KMeans(n_clusters=nb_of_clusters).fit(question_vectors)
     clusters = collections.defaultdict(list)
     for i, label in enumerate(kmeans.labels_):
         clusters[label].append(i)
@@ -83,24 +82,24 @@ def add_query():
         # nel db.
 
         questions = list(collection.find({}))
-        # nclusters = 22
         nclusters = 4
-        clusters = cluster_questions(questions, nclusters)
-        # question_clusters = []
+        if len(questions) >= nclusters:
+            clusters = cluster_questions(questions, nclusters)
+            # question_clusters = []
 
-        for i, cluster in enumerate(clusters):
-            question_cluster = []
-            for j, sentence in enumerate(clusters[cluster]):
-                question_cluster.append(questions[sentence])
+            for i, cluster in enumerate(clusters):
+                question_cluster = []
+                for j, sentence in enumerate(clusters[cluster]):
+                    question_cluster.append(questions[sentence])
 
-            # Se esiste un cluster con un numero strano (da definire, idea: variabile globale) di elementi,
-            # viene attivata la funzione per inviare la notifica al sistema
-            # Tutte le Query che sono state coinvolte per l'attivazione del trigger devono essere eliminate,
-            # sennò alla n+1 query rifaranno ripartire la notifica
-            if len(question_cluster) >= 10:
-                sent_notification(question_cluster)
-                clear_db(question_cluster)
-            # question_clusters.append(question_cluster)
+                # Se esiste un cluster con un numero strano (da definire, idea: variabile globale) di elementi,
+                # viene attivata la funzione per inviare la notifica al sistema
+                # Tutte le Query che sono state coinvolte per l'attivazione del trigger devono essere eliminate,
+                # sennò alla n+1 query rifaranno ripartire la notifica
+                if len(question_cluster) >= 10:
+                    sent_notification(question_cluster)
+                    clear_db(question_cluster)
+                # question_clusters.append(question_cluster)
 
         return request.get_json()
     else:
