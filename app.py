@@ -12,12 +12,14 @@ from sklearn.cluster import KMeans
 
 app = Flask(__name__)
 
-# nlp = spacy.load('it_core_news_sm')
 nlp = spacy.load('it_core_news_sm')
 
 client = MongoClient()
 db = client['Query']
 collection = db['query']
+
+limit = 10
+nclusters = 25
 
 
 def clean_string(inp_str):
@@ -27,10 +29,11 @@ def clean_string(inp_str):
 
 def convert_to_vec(question):
     tokens = clean_string(question)
-    # tokens = [t for t in tokens if t not in stopwords.words('italian')]
-    tokens = [t for t in tokens if t not in stopwords.words('english')]
+    tokens = [t for t in tokens if t not in stopwords.words('italian')]
+    # tokens = [t for t in tokens if t not in stopwords.words('english')]
     # nlp = spacy.load('it')
-    doc = nlp(str(question))
+    # doc = nlp(str(question))
+    doc = nlp(str(tokens))
     return doc.vector
 
 
@@ -74,6 +77,24 @@ def ver_query():
         return "False"
 
 
+@app.route('/setNCluster/<int:n_cluster>', methods=['POST'])
+def set_n_cluster(n_cluster):
+    if isinstance(n_cluster, int):
+        global nclusters
+        nclusters = n_cluster
+        return "N cluster set to " + str(nclusters)
+    return "N cluster not set"
+
+
+@app.route('/setLimit/<int:n_limit>', methods=['POST'])
+def set_limit(n_limit):
+    if isinstance(n_limit, int):
+        global limit
+        limit = n_limit
+        return "Limit set to " + str(limit)
+    return "Limit not set"
+
+
 @app.route('/addQuery', methods=['POST'])
 def add_query():
     if collection.insert_one(json.loads(json_util.dumps(request.get_json()))) and verify_query(request.get_json()):
@@ -82,7 +103,6 @@ def add_query():
         # nel db.
 
         questions = list(collection.find({}))
-        nclusters = 4
         if len(questions) >= nclusters:
             clusters = cluster_questions(questions, nclusters)
             # question_clusters = []
@@ -96,7 +116,7 @@ def add_query():
                 # viene attivata la funzione per inviare la notifica al sistema
                 # Tutte le Query che sono state coinvolte per l'attivazione del trigger devono essere eliminate,
                 # sennò alla n+1 query rifaranno ripartire la notifica
-                if len(question_cluster) >= 10:
+                if len(question_cluster) >= limit:
                     sent_notification(question_cluster)
                     clear_db(question_cluster)
                 # question_clusters.append(question_cluster)
