@@ -1,6 +1,9 @@
 import collections
 import json
+import smtplib
 import string
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 import spacy
 from bson import json_util
@@ -47,6 +50,19 @@ def cluster_questions(questions, nb_of_clusters=5):
 
 
 def sent_notification(questions):
+    with smtplib.SMTP_SSL("smtp.gmail.com") as server:
+        server.login("peak.search.notifier@gmail.com", "Y9{La]h(UP2C")
+
+        sender_email = "peak.search.notifier@gmail.com"
+        tolist = ["humboorw@hi2.in", "paoletti99.bb@gmail.com"]
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = "Nuovo picco di ricerce di Cronache Maceratesi"
+        msg["From"] = sender_email
+        msg["To"] = "paoletti99.bb@gmail.com"
+        text = "Test"
+        msg.attach(MIMEText(text, "plain"))
+        server.sendmail(sender_email, tolist, msg.as_string())
     return True
 
 
