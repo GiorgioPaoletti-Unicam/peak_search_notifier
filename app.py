@@ -24,6 +24,8 @@ collection = db['query']
 limit = 10
 nclusters = 25
 
+server = None
+
 
 def clean_string(inp_str):
     st = str.maketrans('', '', string.punctuation)
@@ -50,19 +52,17 @@ def cluster_questions(questions, nb_of_clusters=5):
 
 
 def sent_notification(questions):
-    with smtplib.SMTP_SSL("smtp.gmail.com") as server:
-        server.login("peak.search.notifier@gmail.com", "Y9{La]h(UP2C")
+    sender_email = "peak.search.notifier@gmail.com"
+    tolist = ["humboorw@hi2.in", "paoletti99.bb@gmail.com"]
 
-        sender_email = "peak.search.notifier@gmail.com"
-        tolist = ["humboorw@hi2.in", "paoletti99.bb@gmail.com"]
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = "New peak search of Cronache Maceratesi"
+    msg["From"] = sender_email
+    msg["To"] = "paoletti99.bb@gmail.com"
+    text = "Test"
+    msg.attach(MIMEText(text, "plain"))
+    server.sendmail(sender_email, tolist, msg.as_string())
 
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = "Nuovo picco di ricerce di Cronache Maceratesi"
-        msg["From"] = sender_email
-        msg["To"] = "paoletti99.bb@gmail.com"
-        text = "Test"
-        msg.attach(MIMEText(text, "plain"))
-        server.sendmail(sender_email, tolist, msg.as_string())
     return True
 
 
@@ -109,6 +109,17 @@ def set_limit(n_limit):
         limit = n_limit
         return "Limit set to " + str(limit)
     return "Limit not set"
+
+
+@app.route('/login', methods=['POST'])
+def login():
+    try:
+        global server
+        server = smtplib.SMTP_SSL("smtp.gmail.com")
+        server.login("peak.search.notifier@gmail.com", request.get_json()["pas"])
+    except Exception as e:
+        return str(e)
+    return "True"
 
 
 @app.route('/addQuery', methods=['POST'])
