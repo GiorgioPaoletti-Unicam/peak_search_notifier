@@ -35,8 +35,6 @@ def clean_string(inp_str):
 def convert_to_vec(question):
     tokens = clean_string(question)
     tokens = [t for t in tokens if t not in stopwords.words('italian')]
-    # tokens = [t for t in tokens if t not in stopwords.words('english')]
-    # nlp = spacy.load('it')
     # doc = nlp(str(question))
     doc = nlp(str(tokens))
     return doc.vector
@@ -56,10 +54,12 @@ def sent_notification(questions):
     tolist = ["humboorw@hi2.in", "paoletti99.bb@gmail.com"]
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = "New peak search of Cronache Maceratesi"
+    msg["Subject"] = "New peak of search on Cronache Maceratesi"
     msg["From"] = sender_email
     msg["To"] = "paoletti99.bb@gmail.com"
-    text = "Test"
+    text = ""
+    for t in questions:
+        text += t["text"] + "\n"
     msg.attach(MIMEText(text, "plain"))
     server.sendmail(sender_email, tolist, msg.as_string())
 
@@ -119,38 +119,32 @@ def login():
         server.login("peak.search.notifier@gmail.com", request.get_json()["pas"])
     except Exception as e:
         return str(e)
-    return "True"
+    return "Login in"
 
 
 @app.route('/addQuery', methods=['POST'])
 def add_query():
-    if collection.insert_one(json.loads(json_util.dumps(request.get_json()))) and verify_query(request.get_json()):
-
-        # Se viene aggiunta una query correttamente, viene ricalcolato l'algoritmo k-means su tutte le query presenti
-        # nel db.
-
-        questions = list(collection.find({}))
-        if len(questions) >= nclusters:
-            clusters = cluster_questions(questions, nclusters)
-            # question_clusters = []
-
-            for i, cluster in enumerate(clusters):
-                question_cluster = []
-                for j, sentence in enumerate(clusters[cluster]):
-                    question_cluster.append(questions[sentence])
-
-                # Se esiste un cluster con un numero strano (da definire, idea: variabile globale) di elementi,
-                # viene attivata la funzione per inviare la notifica al sistema
-                # Tutte le Query che sono state coinvolte per l'attivazione del trigger devono essere eliminate,
-                # sennò alla n+1 query rifaranno ripartire la notifica
-                if len(question_cluster) >= limit:
-                    sent_notification(question_cluster)
-                    clear_db(question_cluster)
-                # question_clusters.append(question_cluster)
-
-        return request.get_json()
+    if server is None:
+        return "Login not logged"
     else:
-        return "query not added"
+        if collection.insert_one(json.loads(json_util.dumps(request.get_json()))) and verify_query(request.get_json()):
+
+            questions = list(collection.find({}))
+            if len(questions) >= nclusters:
+                clusters = cluster_questions(questions, nclusters)
+
+                for i, cluster in enumerate(clusters):
+                    question_cluster = []
+                    for j, sentence in enumerate(clusters[cluster]):
+                        question_cluster.append(questions[sentence])
+
+                    if len(question_cluster) >= limit:
+                        sent_notification(question_cluster)
+                        clear_db(question_cluster)
+
+            return request.get_json()
+        else:
+            return "Query not added"
 
 
 if __name__ == '__main__':
