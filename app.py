@@ -83,6 +83,10 @@ def hello_world():  # put application's code here
 
 
 # Svuotare il db ogni giorno
+@app.route('/clear', methods=['POST'])
+def clear():
+    collection.delete_many({})
+    return 'True'
 
 
 @app.route('/verifyQuery', methods=['GET'])
