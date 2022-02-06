@@ -1,10 +1,12 @@
 import collections
 import json
+import math
 import smtplib
 import string
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+import matplotlib.pyplot as plt
 import spacy
 from bson import json_util
 from flask import Flask
@@ -12,6 +14,15 @@ from flask import request
 from nltk.corpus import stopwords
 from pymongo import MongoClient
 from sklearn.cluster import KMeans
+
+from threading import Thread
+from datetime import datetime
+import requests
+import time
+
+
+# QUERY ANALYSIS
+
 
 app = Flask(__name__)
 
@@ -35,8 +46,7 @@ def clean_string(inp_str):
 def convert_to_vec(question):
     tokens = clean_string(question)
     tokens = [t for t in tokens if t not in stopwords.words('italian')]
-    # doc = nlp(str(question))
-    doc = nlp(str(tokens))
+    doc = nlp(str(question))
     return doc.vector
 
 
@@ -78,7 +88,7 @@ def verify_query(query):
 
 
 @app.route('/')
-def hello_world():  # put application's code here
+def hello_world():  # check if everything is working
     return 'Hello World!'
 
 
@@ -126,6 +136,37 @@ def login():
     return "Login in"
 
 
+def cluster_variance(n):
+    variances = []
+    kmeans = []
+    outputs = []
+    K = [i for i in range(1, n + 1)]
+
+    questions = list(collection.find({}))
+    question_vectors = [convert_to_vec(question["text"]) for question in questions]
+
+    for i in range(1, n + 1):
+        variance = 0
+        model = KMeans(n_clusters=i, random_state=82, verbose=2).fit(question_vectors)
+        kmeans.append(model)
+        variances.append(model.inertia_)
+
+    return variances, K, n
+
+
+@app.route('/draw', methods=['GET'])
+def draw():
+    variances, K, n = cluster_variance(nclusters)
+
+    plt.plot(K, variances)
+    plt.ylabel("Variance")
+    plt.xlabel("K Value")
+    # plt.xticks([i for i in range(1, n + 1)])
+    plt.show()
+
+    return "True"
+
+
 @app.route('/addQuery', methods=['POST'])
 def add_query():
     if server is None:
@@ -134,8 +175,10 @@ def add_query():
         if collection.insert_one(json.loads(json_util.dumps(request.get_json()))) and verify_query(request.get_json()):
 
             questions = list(collection.find({}))
-            if len(questions) >= nclusters:
-                clusters = cluster_questions(questions, nclusters)
+            # if len(questions) >= nclusters:
+            if len(questions) >= math.ceil(collection.count_documents({}) / 2):
+                # clusters = cluster_questions(questions, nclusters)
+                clusters = cluster_questions(questions, math.ceil(collection.count_documents({}) / 2))
 
                 for i, cluster in enumerate(clusters):
                     question_cluster = []
@@ -151,5 +194,82 @@ def add_query():
             return "Query not added"
 
 
-if __name__ == '__main__':
+def run_app():
+    print("Query analyzer started.")
     app.run()
+
+
+# FETCH QUERIES
+
+
+def send_queries(queries):
+    for q in queries:
+        requests.post("http://127.0.0.1:5000/addQuery", data={'text': q})
+
+
+def is_valid(string):
+    return all(x.isalpha() or x.isspace() for x in string) and string != "ep_autosuggest_placeholder"
+
+
+def too_close(current, previous):
+    return (current - previous) < 100
+
+
+def get_time_in_millis(single_line):
+    query_time = single_line.split(']')[0][1:]
+    dt_obj = datetime.strptime(query_time, '%Y-%m-%dT%H:%M:%S,%f')
+    millis = dt_obj.timestamp() * 1000
+    return millis
+
+
+def get_query(complete_line):
+    json_part = json.loads(complete_line[complete_line.find("source") + 7:-9])  # trim json part
+    res = json_part["query"]["function_score"]["query"]["bool"]["should"][0]["bool"]["must"][0]["bool"]["should"][0]["multi_match"]["query"]  # retrieve actual query content
+    return res
+
+def query_fetcher():
+    print("Query fetcher started.")
+    while True:
+        with open('/var/log/elasticsearch/csdproject_index_search_slowlog.log', 'r+', encoding="utf-8") as file:
+            file_contents = file.read()
+            query_list = []
+            prev_query = ""
+            prev_time = 0.0
+            for line in file_contents.split('\n'):
+                try:
+                    query = get_query(line)
+                    if is_valid(query) and (query != prev_query or not too_close(get_time_in_millis(line), prev_time)):
+                        query_list.append(query)
+                    prev_query = query
+                    prev_time = get_time_in_millis(line)
+                except Exception:
+                    pass
+            if len(query_list) > 0:
+                send_queries(query_list)
+            # print(len(query_list))
+            # print(query_list)
+            file.truncate(0)
+            file.close()
+        time.sleep(54000)  # Sleep 30 minutes = 54000
+
+
+# EMPTY QUERY DATABASE
+
+
+def empty_db():
+    print("Empty DB started.")
+    while True:
+        time.sleep(172800)  # 2 days in seconds
+        requests.post("http://127.0.0.1:5000/clear")
+
+
+# MAIN
+
+
+if __name__ == '__main__':
+    try:
+        t1 = Thread(target=run_app).start()
+        t2 = Thread(target=query_fetcher).start()
+        t3 = Thread(target=empty_db).start()
+    except Exception as e:
+        print("Unexpected error: " + str(e))
